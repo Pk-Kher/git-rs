@@ -22,7 +22,6 @@ enum Commands {
 }
 fn main() -> io::Result<()> {
     let args = Args::parse();
-    println!("{:?}", args);
     match args.command {
         Commands::Init => {
             fs::create_dir(".git").unwrap();
@@ -32,7 +31,7 @@ fn main() -> io::Result<()> {
             println!("Initialized git directory")
         }
         Commands::CatFile {
-            pretty_print,
+            pretty_print: _,
             object_hash,
         } => {
             let f = fs::read(format!(
@@ -44,7 +43,13 @@ fn main() -> io::Result<()> {
             let mut z = ZlibDecoder::new(&f[..]);
             let mut s = String::new();
             z.read_to_string(&mut s)?;
-            print!("{}", s);
+            let data = s.find("\0").take();
+            if let Some(nullish) = data {
+                let s = &s[nullish..];
+                print!("{} ", s);
+            } else {
+                print!("{} ", s);
+            }
             io::stdout().flush().expect("Failed to flush stdout");
         }
     }
