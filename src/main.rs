@@ -45,9 +45,7 @@ fn main() -> io::Result<()> {
             z.read_to_string(&mut s)?;
             let data = s.find("\0").take();
             if let Some(nullish) = data {
-                let s = &s[nullish..];
-                print!("{} ", s);
-            } else {
+                let s = &s[nullish+1..];
                 print!("{} ", s);
             }
             io::stdout().flush().expect("Failed to flush stdout");
