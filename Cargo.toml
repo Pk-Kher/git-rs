@@ -4,6 +4,10 @@ version = "0.1.0"
 edition = "2024"
 rust-version = "1.91"
 
+[[bin]]
+name = "git-rust"
+path = "src/main.rs"
+
 [dependencies]
 anyhow = "1.0.68"                                # error handling
 bytes = "1.3.0"                                  # helps manage buffers
