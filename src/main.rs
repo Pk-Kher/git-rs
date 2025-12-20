@@ -43,12 +43,10 @@ fn main() -> io::Result<()> {
             let mut z = ZlibDecoder::new(&f[..]);
             let mut s = String::new();
             z.read_to_string(&mut s)?;
-            let data = s.find("\0").take();
-            if let Some(nullish) = data {
-                let s = &s[nullish..];
-                print!("{} ", s);
+            if let Some(null_pos) = s.find('\0') {
+                print!("{}", &s[null_pos + 1..]);
             } else {
-                print!("{} ", s);
+                print!("{}", s);
             }
             io::stdout().flush().expect("Failed to flush stdout");
         }
