@@ -1,7 +1,9 @@
+use anyhow::Context;
 use clap::{Parser, Subcommand};
 use flate2::read::ZlibDecoder;
+use std::ffi::CStr;
 use std::fs;
-use std::io::{self, Read, Write};
+use std::io::{BufRead, BufReader, Read};
 
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
@@ -14,13 +16,20 @@ struct Args {
 enum Commands {
     Init,
     CatFile {
-        /// lists test values
         #[arg(short = 'p')]
         pretty_print: bool,
         object_hash: String,
     },
+    HashObject {
+        #[arg(short = 'w')]
+        write: bool,
+        file_path: String,
+    },
 }
-fn main() -> io::Result<()> {
+enum Kind {
+    Blob,
+}
+fn main() -> anyhow::Result<()> {
     let args = Args::parse();
     match args.command {
         Commands::Init => {
@@ -31,24 +40,55 @@ fn main() -> io::Result<()> {
             println!("Initialized git directory")
         }
         Commands::CatFile {
-            pretty_print: _,
+            pretty_print: p,
             object_hash,
         } => {
-            let f = fs::read(format!(
+            anyhow::ensure!(p, "Please provide the flag 'p'");
+            let f = fs::File::open(format!(
                 ".git/objects/{}/{}",
                 &object_hash[..2],
                 &object_hash[2..],
             ))
-            .unwrap();
-            let mut z = ZlibDecoder::new(&f[..]);
-            let mut s = String::new();
-            z.read_to_string(&mut s)?;
-            let data = s.find("\0").take();
-            if let Some(nullish) = data {
-                let s = &s[nullish + 1..];
-                print!("{}", s);
+            .context(" file does't exits")?;
+            let z = ZlibDecoder::new(f);
+            let mut z = BufReader::new(z);
+            let mut buf = Vec::new();
+            z.read_until(0, &mut buf)
+                .context("reading header from .git/object")?;
+            let header = CStr::from_bytes_with_nul(&buf)
+                .expect("know there is exactly one nul, and it's at the end");
+            let header = header
+                .to_str()
+                .context(".git/objects file header isn't valid UTF-8")?;
+            let Some((kind, size)) = header.split_once(' ') else {
+                anyhow::bail!(
+                    ".git/objects file header did not start with a known type: '{header}'"
+                );
+            };
+            let kind = match kind {
+                "blob" => Kind::Blob,
+                _ => anyhow::bail!("we do not yet know how to print a '{kind}'"),
+            };
+            let size = size.parse::<u64>().context("file size is not valid")?;
+
+            let mut z = z.take(size);
+            match kind {
+                Kind::Blob => {
+                    let stdout = std::io::stdout();
+                    let mut stdout = stdout.lock();
+                    let n = std::io::copy(&mut z, &mut stdout).context("Write into the stdout")?;
+                    anyhow::ensure!(
+                        n == size,
+                        ".git/object file was not expected size (expected :{size}, actual: {n})"
+                    );
+                }
             }
-            io::stdout().flush().expect("Failed to flush stdout");
+        }
+        Commands::HashObject {
+            write: _,
+            file_path,
+        } => {
+            println!("{}", file_path);
         }
     }
     Ok(())
