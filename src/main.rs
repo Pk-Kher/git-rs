@@ -1,10 +1,13 @@
 use anyhow::Context;
 use clap::{Parser, Subcommand};
+use flate2::Compression;
 use flate2::read::ZlibDecoder;
+use flate2::read::ZlibEncoder;
+use sha1::{Digest, Sha1};
 use std::ffi::CStr;
 use std::fs;
-use std::io::{BufRead, BufReader, Read};
-
+use std::io::prelude::*;
+use std::io::{BufReader, Read};
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
 struct Args {
@@ -43,6 +46,9 @@ fn main() -> anyhow::Result<()> {
             pretty_print: p,
             object_hash,
         } => {
+            // run test
+            // /path/to/your_program.sh cat-file -p 3b18e512dba79e4c8300dd08aeb37f8e728b8dad
+            // hello world
             anyhow::ensure!(p, "Please provide the flag 'p'");
             let f = fs::File::open(format!(
                 ".git/objects/{}/{}",
@@ -54,7 +60,7 @@ fn main() -> anyhow::Result<()> {
             let mut z = BufReader::new(z);
             let mut buf = Vec::new();
             z.read_until(0, &mut buf)
-                .context("reading header from .git/object")?;
+                .context("Reading header from .git/object")?;
             let header = CStr::from_bytes_with_nul(&buf)
                 .expect("know there is exactly one nul, and it's at the end");
             let header = header
@@ -88,7 +94,40 @@ fn main() -> anyhow::Result<()> {
             write: _,
             file_path,
         } => {
-            println!("{}", file_path);
+            // run test
+            // $ mkdir test_dir && cd test_dir
+            // $ /path/to/your_program.sh init
+            // $ echo "hello world" > test.txt
+            // $ ./your_program.sh hash-object -w test.txt
+            // 3b18e512dba79e4c8300dd08aeb37f8e728b8dad
+            let f = fs::File::open(file_path).context("File is not exits")?;
+            let mut b = BufReader::new(f);
+            let mut buffer = Vec::new();
+            b.read_to_end(&mut buffer)
+                .context("Read the encoded file")?;
+            // add the bolb <size>\0<content>
+            let size = buffer.len();
+            let mut header = format!("blob {}", size).into_bytes();
+            header.push(0);
+            let mut new_buf = Vec::with_capacity(size + header.len());
+            new_buf.extend_from_slice(&header);
+            new_buf.extend_from_slice(&buffer);
+
+            // calculate the hash
+            let mut hasher = Sha1::new();
+            hasher.update(&new_buf);
+            let result = format!("{:x}", hasher.finalize());
+            let mut z = ZlibEncoder::new(&new_buf[..], Compression::fast());
+            buffer.clear();
+            z.read_to_end(&mut buffer).context("some")?;
+
+            fs::create_dir_all(format!(".git/objects/{}", &result[..2]))
+                .context("Failed to create parent dir for .git/objects/")?;
+            fs::write(
+                format!(".git/objects/{}/{}", &result[..2], &result[2..]),
+                &buffer[..],
+            )
+            .context("Failed to create file in .git/objects")?;
         }
     }
     Ok(())
