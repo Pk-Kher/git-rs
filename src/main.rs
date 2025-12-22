@@ -17,6 +17,7 @@ struct Args {
     command: Commands,
 }
 
+
 #[derive(Subcommand, Debug)]
 enum Commands {
     Init,
