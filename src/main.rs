@@ -214,32 +214,34 @@ fn main() -> anyhow::Result<()> {
             match kind {
                 Kind::Tree => {
                     let mut read_bytes: usize = 0;
+                    let mut mode = Vec::new();
+                    let mut file_name = Vec::new();
+                    let mut hash = [0; 20];
                     while size > read_bytes {
-                        let mut mode = Vec::new();
+                        mode.clear();
+                        file_name.clear();
+
                         read_bytes += z.read_until(b' ', &mut mode)?;
-                        let mut file_name = Vec::new();
                         read_bytes += z.read_until(0, &mut file_name)?;
-                        let file_name = CStr::from_bytes_with_nul(&file_name[..])
-                            .expect("know there is exactly one nul, and it's at the end");
-                        let file_name = file_name
-                            .to_str()
-                            .context(".git/objects file header isn't valid UTF-8")?;
-                        let mut hash = [0; 20];
+
+                        if let Some(&b' ') = mode.last() {
+                            mode.pop();
+                        }
+                        if let Some(&0) = file_name.last() {
+                            file_name.pop();
+                        }
                         z.read_exact(&mut hash)?;
                         read_bytes += 20;
-                        let _hex = hash
-                            .iter()
-                            .map(|b| format!("{:02x}", b))
-                            .collect::<String>();
 
-                        println!("{}", file_name);
-                        // println!(
-                        //     "{} {} {}    {}",
-                        //     std::str::from_utf8(&mode)?,
+                        // print!(
+                        //     "{:0>6} {} ",
+                        //     format!("{}", std::str::from_utf8(&mode)?),
                         //     kind_raw,
-                        //     hex,
-                        //     std::str::from_utf8(&file_name)?
                         // );
+                        // for byte in &hash {
+                        //     print!("{:02x}", byte);
+                        // }
+                        println!("{}", std::str::from_utf8(&file_name)?);
                     }
                 }
                 _ => anyhow::bail!("we do not yet know how to print a '{:?}'", kind),
