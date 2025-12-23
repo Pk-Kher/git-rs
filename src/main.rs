@@ -41,6 +41,21 @@ enum Kind {
     Blob,
     Tree,
 }
+impl Kind {
+    fn from_mode(mode: &[u8]) -> Result<Self, anyhow::Error> {
+        match mode {
+            b"40000" => Ok(Kind::Tree),
+            b"100644" | b"100755" | b"120000" => Ok(Kind::Blob),
+            _ => anyhow::bail!("unknown mode:{:?}", std::str::from_utf8(mode)),
+        }
+    }
+    fn to_str(&self) -> &str {
+        match self {
+            Kind::Blob => "blob",
+            Kind::Tree => "tree",
+        }
+    }
+}
 fn main() -> anyhow::Result<()> {
     let args = Args::parse();
     match args.command {
@@ -179,7 +194,7 @@ fn main() -> anyhow::Result<()> {
             // .context("Failed to create file in .git/objects")?;
         }
         Commands::LsTree {
-            name_only: _,
+            name_only,
             tree_object,
         } => {
             // print!("{}, {:?} ", name_only, tree_object);
@@ -199,18 +214,21 @@ fn main() -> anyhow::Result<()> {
             let header = header
                 .to_str()
                 .context(".git/objects file header isn't valid UTF-8")?;
-            let Some((kind_raw, size)) = header.split_once(' ') else {
+            let Some((kind, size)) = header.split_once(' ') else {
                 anyhow::bail!(
                     ".git/objects file header did not start with a known type: '{header}'"
                 );
             };
-            let kind = match kind_raw {
+            let kind = match kind {
                 "tree" => Kind::Tree,
-                _ => anyhow::bail!("we do not yet know how to print a '{kind_raw}'"),
+                _ => anyhow::bail!("we do not yet know how to print a '{kind}'"),
             };
             let size = size
                 .parse::<usize>()
                 .context("Failed to parse size from &str to u64")?;
+            // let stdout = std::io::stdout();
+            // let mut stdout = stdout.lock();
+            // std::io::copy(&mut z, &mut stdout)?;
             match kind {
                 Kind::Tree => {
                     let mut read_bytes: usize = 0;
@@ -233,14 +251,17 @@ fn main() -> anyhow::Result<()> {
                         z.read_exact(&mut hash)?;
                         read_bytes += 20;
 
-                        // print!(
-                        //     "{:0>6} {} ",
-                        //     format!("{}", std::str::from_utf8(&mode)?),
-                        //     kind_raw,
-                        // );
-                        // for byte in &hash {
-                        //     print!("{:02x}", byte);
-                        // }
+                        if !name_only {
+                            print!(
+                                "{:0>6} {} ",
+                                format!("{}", std::str::from_utf8(&mode)?),
+                                Kind::from_mode(&mode)?.to_str(),
+                            );
+                            for byte in &hash {
+                                print!("{:02x}", byte);
+                            }
+                            print!("    ");
+                        }
                         println!("{}", std::str::from_utf8(&file_name)?);
                     }
                 }
