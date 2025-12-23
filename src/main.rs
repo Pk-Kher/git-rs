@@ -219,6 +219,11 @@ fn main() -> anyhow::Result<()> {
                         read_bytes += z.read_until(b' ', &mut mode)?;
                         let mut file_name = Vec::new();
                         read_bytes += z.read_until(0, &mut file_name)?;
+                        let file_name = CStr::from_bytes_with_nul(&file_name[..])
+                            .expect("know there is exactly one nul, and it's at the end");
+                        let file_name = file_name
+                            .to_str()
+                            .context(".git/objects file header isn't valid UTF-8")?;
                         let mut hash = [0; 20];
                         z.read_exact(&mut hash)?;
                         read_bytes += 20;
@@ -227,7 +232,7 @@ fn main() -> anyhow::Result<()> {
                             .map(|b| format!("{:02x}", b))
                             .collect::<String>();
 
-                        println!("{}", std::str::from_utf8(&file_name)?);
+                        println!("{}", file_name);
                         // println!(
                         //     "{} {} {}    {}",
                         //     std::str::from_utf8(&mode)?,
