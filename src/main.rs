@@ -6,17 +6,17 @@ use flate2::write::ZlibEncoder;
 // use flate2::read::ZlibEncoder; // my code
 use sha1::{Digest, Sha1};
 use std::ffi::CStr;
-use std::fs;
 use std::io::prelude::*;
 use std::io::{BufReader, Read};
 use std::path::{Path, PathBuf};
+use std::ptr::hash;
+use std::{any, fs, usize};
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
 struct Args {
     #[command(subcommand)]
     command: Commands,
 }
-
 
 #[derive(Subcommand, Debug)]
 enum Commands {
@@ -31,9 +31,16 @@ enum Commands {
         write: bool,
         file_path: PathBuf,
     },
+    LsTree {
+        #[arg(long = "name-only")]
+        name_only: bool,
+        tree_object: String,
+    },
 }
+#[derive(Debug)]
 enum Kind {
     Blob,
+    Tree,
 }
 fn main() -> anyhow::Result<()> {
     let args = Args::parse();
@@ -58,7 +65,7 @@ fn main() -> anyhow::Result<()> {
                 &object_hash[..2],
                 &object_hash[2..],
             ))
-            .context(" file does't exits")?;
+            .context("File does't exits")?;
             let z = ZlibDecoder::new(f);
             let mut z = BufReader::new(z);
             let mut buf = Vec::new();
@@ -91,6 +98,7 @@ fn main() -> anyhow::Result<()> {
                         ".git/object file was not expected size (expected :{size}, actual: {n})"
                     );
                 }
+                _ => anyhow::bail!("we do not yet know how to print a '{:?}'", kind),
             }
         }
         Commands::HashObject { write, file_path } => {
@@ -170,6 +178,67 @@ fn main() -> anyhow::Result<()> {
             //     &buffer[..],
             // )
             // .context("Failed to create file in .git/objects")?;
+        }
+        Commands::LsTree {
+            name_only: _,
+            tree_object,
+        } => {
+            // print!("{}, {:?} ", name_only, tree_object);
+            let file = fs::File::open(format!(
+                ".git/objects/{}/{}",
+                &tree_object[..2],
+                &tree_object[2..]
+            ))
+            .with_context(|| format!("Failed to open the file:{:?}", &tree_object))?;
+            let z = ZlibDecoder::new(file);
+            let mut z = BufReader::new(z);
+            let mut buf = Vec::new();
+            z.read_until(0, &mut buf)
+                .context("Reading header from .git/object")?;
+            let header = CStr::from_bytes_with_nul(&buf[..])
+                .expect("know there is exactly one nul, and it's at the end");
+            let header = header
+                .to_str()
+                .context(".git/objects file header isn't valid UTF-8")?;
+            let Some((kind_raw, size)) = header.split_once(' ') else {
+                anyhow::bail!(
+                    ".git/objects file header did not start with a known type: '{header}'"
+                );
+            };
+            let kind = match kind_raw {
+                "tree" => Kind::Tree,
+                _ => anyhow::bail!("we do not yet know how to print a '{kind_raw}'"),
+            };
+            let size = size
+                .parse::<usize>()
+                .context("Failed to parse size from &str to u64")?;
+            match kind {
+                Kind::Tree => {
+                    let mut read_bytes: usize = 0;
+                    while size > read_bytes {
+                        let mut mode = Vec::new();
+                        read_bytes += z.read_until(b' ', &mut mode)?;
+                        let mut file_name = Vec::new();
+                        read_bytes += z.read_until(0, &mut file_name)?;
+                        let mut hash = [0; 20];
+                        z.read_exact(&mut hash)?;
+                        read_bytes += 20;
+                        let hex = hash
+                            .iter()
+                            .map(|b| format!("{:02x}", b))
+                            .collect::<String>();
+                        println!("{}", std::str::from_utf8(&file_name)?);
+                        // println!(
+                        //     "{} {} {}    {}",
+                        //     std::str::from_utf8(&mode)?,
+                        //     kind_raw,
+                        //     hex,
+                        //     std::str::from_utf8(&file_name)?
+                        // );
+                    }
+                }
+                _ => anyhow::bail!("we do not yet know how to print a '{:?}'", kind),
+            }
         }
     }
     Ok(())
