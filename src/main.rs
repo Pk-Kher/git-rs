@@ -6,11 +6,10 @@ use flate2::write::ZlibEncoder;
 // use flate2::read::ZlibEncoder; // my code
 use sha1::{Digest, Sha1};
 use std::ffi::CStr;
+use std::fs;
 use std::io::prelude::*;
 use std::io::{BufReader, Read};
 use std::path::{Path, PathBuf};
-use std::ptr::hash;
-use std::{any, fs, usize};
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
 struct Args {
@@ -223,10 +222,11 @@ fn main() -> anyhow::Result<()> {
                         let mut hash = [0; 20];
                         z.read_exact(&mut hash)?;
                         read_bytes += 20;
-                        let hex = hash
+                        let _hex = hash
                             .iter()
                             .map(|b| format!("{:02x}", b))
                             .collect::<String>();
+
                         println!("{}", std::str::from_utf8(&file_name)?);
                         // println!(
                         //     "{} {} {}    {}",
