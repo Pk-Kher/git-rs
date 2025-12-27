@@ -13,15 +13,6 @@ pub(crate) enum Kind {
     Tree,
     Commit,
 }
-impl Kind {
-    pub(crate) fn from_mode(mode: &[u8]) -> Result<Self, anyhow::Error> {
-        match mode {
-            b"40000" => Ok(Kind::Tree),
-            b"100644" | b"100755" | b"120000" => Ok(Kind::Blob),
-            _ => anyhow::bail!("unknown mode:{:?}", std::str::from_utf8(mode)),
-        }
-    }
-}
 impl fmt::Display for Kind {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
