@@ -31,6 +31,15 @@ enum Commands {
         tree_object: String,
     },
     WriteTree,
+    CommitTree {
+        tree_sha: String,
+        #[arg(short = 'p')]
+        parent_commit: bool,
+        commit_sha: String,
+        #[arg(short = 'm')]
+        commit_flag: bool,
+        commit_message: String,
+    },
 }
 fn main() -> anyhow::Result<()> {
     let args = Args::parse();
@@ -55,6 +64,21 @@ fn main() -> anyhow::Result<()> {
         } => commands::ls_tree::invoke(name_only, tree_object)?,
         Commands::WriteTree => {
             commands::write_tree::invoke(&PathBuf::from("."))?;
+        }
+        Commands::CommitTree {
+            tree_sha,
+            parent_commit,
+            commit_sha,
+            commit_flag,
+            commit_message,
+        } => {
+            commands::commit_tree::invoke(
+                tree_sha,
+                parent_commit,
+                commit_sha,
+                commit_flag,
+                commit_message,
+            )?;
         }
     }
     Ok(())

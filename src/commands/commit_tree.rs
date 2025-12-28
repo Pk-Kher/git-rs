@@ -1,0 +1,29 @@
+use std::io::Cursor;
+
+use anyhow::Context;
+
+use crate::objects::{Kind, Object};
+
+pub(crate) fn invoke(
+    tree_sha: String,
+    _parent_commit: bool,
+    commit_sha: String,
+    _: bool,
+    commit_message: String,
+) -> anyhow::Result<()> {
+    let mut commit_object = Vec::new();
+    commit_object.extend(format!("tree {}\n", tree_sha).as_bytes());
+    commit_object.extend(format!("parent {}\n", commit_sha).as_bytes());
+    commit_object.extend(format!("author John Doe <john@example.com> 1234567890 +0000\ncommitter John Doe <john@example.com> 1234567890 +0000").as_bytes());
+    commit_object.push(b'\n');
+    commit_object.extend(format!("{}", commit_message).as_bytes());
+    let hash = Object {
+        kind: Kind::Commit,
+        expected_size: commit_object.len() as u64,
+        reader: Cursor::new(commit_object),
+    }
+    .write_to_object()
+    .context("Failed to write the commit objects")?;
+    println!("{}", hex::encode(hash));
+    Ok(())
+}
