@@ -1,11 +1,7 @@
 use anyhow::Context;
 use clap::{Parser, Subcommand, command};
-use ini::Ini;
-use std::fmt::format;
 use std::fs;
 use std::path::PathBuf;
-
-use crate::commands::commit_tree;
 
 pub(crate) mod commands;
 pub(crate) mod objects;
@@ -47,6 +43,7 @@ enum Commands {
         #[arg(short = 'm')]
         message: String,
     },
+    // implement the git config user.name and user.email
 }
 fn main() -> anyhow::Result<()> {
     let args = Args::parse();
