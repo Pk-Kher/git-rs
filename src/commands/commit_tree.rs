@@ -2,11 +2,11 @@ use crate::objects::{Kind, Object};
 use anyhow::Context;
 use std::io::Cursor;
 
-pub(crate) fn invoke(
-    tree_sha: String,
-    parent_commit_sha: Option<String>,
-    commit_message: String,
-) -> anyhow::Result<()> {
+pub(crate) fn write_commit(
+    tree_sha: &str,
+    parent_commit_sha: Option<&str>,
+    commit_message: &str,
+) -> anyhow::Result<[u8; 20]> {
     let mut commit_object = Vec::new();
     commit_object.extend(format!("tree {}\n", tree_sha).as_bytes());
     if let Some(commit) = parent_commit_sha {
@@ -21,6 +21,15 @@ pub(crate) fn invoke(
     }
     .write_to_object()
     .context("Failed to write the commit objects")?;
+    Ok(hash)
+}
+
+pub(crate) fn invoke(
+    tree_sha: String,
+    parent_commit_sha: Option<String>,
+    commit_message: String,
+) -> anyhow::Result<()> {
+    let hash = write_commit(&tree_sha, parent_commit_sha.as_deref(), &commit_message)?;
     println!("{}", hex::encode(hash));
     Ok(())
 }

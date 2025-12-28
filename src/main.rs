@@ -1,6 +1,10 @@
+use anyhow::Context;
 use clap::{Parser, Subcommand, command};
+use std::fmt::format;
 use std::fs;
 use std::path::PathBuf;
+
+use crate::commands::commit_tree;
 
 pub(crate) mod commands;
 pub(crate) mod objects;
@@ -38,6 +42,10 @@ enum Commands {
         #[arg(short = 'm', value_name = "COMMIT_MESSAGE")]
         commit_message: String,
     },
+    Commit {
+        #[arg(short = 'm')]
+        message: String,
+    },
 }
 fn main() -> anyhow::Result<()> {
     let args = Args::parse();
@@ -69,6 +77,34 @@ fn main() -> anyhow::Result<()> {
             commit_message,
         } => {
             commands::commit_tree::invoke(tree_sha, parent_commit_sha, commit_message)?;
+        }
+        Commands::Commit { message } => {
+            // to commit we need value same as the commit-tree
+            //value of head=ref: refs/heads/master
+            let head_ref =
+                std::fs::read_to_string(".git/HEAD").context("Failed to read the head")?;
+            let Some(head_ref) = head_ref.strip_prefix("ref: ") else {
+                anyhow::bail!("Refusing to commit onto detached HEAD")
+            };
+            let head_ref = head_ref.trim();
+            let parent_sha = std::fs::read_to_string(format!("./.git/{head_ref}"))
+                .with_context(|| format!("Failed to read the parent commit hash:{}", head_ref))?;
+            let parent_sha = parent_sha.trim();
+
+            let Some(tree_hash) = commands::write_tree::write_tree_for(&PathBuf::from("."))? else {
+                eprintln!("Not commiting the empty tree");
+                return Ok(());
+            };
+            let tree_hash = hex::encode(tree_hash);
+
+            let commit_hash =
+                commands::commit_tree::write_commit(&tree_hash, Some(parent_sha), &message)
+                    .with_context(|| format!("Failed to generate commit hash"))?;
+            let commit_hash = hex::encode(commit_hash);
+
+            std::fs::write(format!(".git/{head_ref}"), &commit_hash)
+                .with_context(|| format!("Failed to update the HEAD ref at :{}", head_ref))?;
+            eprintln!("HEAD is now at {}",commit_hash);
         }
     }
     Ok(())
