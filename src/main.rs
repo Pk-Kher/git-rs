@@ -34,9 +34,9 @@ enum Commands {
     CommitTree {
         tree_sha: String,
         #[arg(short = 'p', value_name = "PARENT_COMMIT")]
-        parent_commit: Option<String>,
+        parent_commit_sha: Option<String>,
         #[arg(short = 'm', value_name = "COMMIT_MESSAGE")]
-        commit_message: Option<String>,
+        commit_message: String,
     },
 }
 fn main() -> anyhow::Result<()> {
@@ -65,10 +65,10 @@ fn main() -> anyhow::Result<()> {
         }
         Commands::CommitTree {
             tree_sha,
-            parent_commit,
+            parent_commit_sha,
             commit_message,
         } => {
-            commands::commit_tree::invoke(tree_sha, parent_commit, commit_message)?;
+            commands::commit_tree::invoke(tree_sha, parent_commit_sha, commit_message)?;
         }
     }
     Ok(())
