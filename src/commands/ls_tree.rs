@@ -14,7 +14,7 @@ pub(crate) fn invoke(name_only: bool, tree_object: String) -> anyhow::Result<()>
             let mut mode = Vec::new();
             let mut file_name = Vec::new();
             let mut hashbuf = [0; 20];
-            // let stdout = std::io::stdout();
+           // let stdout = std::io::stdout();
             // let mut stdout = stdout.lock();
             // std::io::copy(&mut object.reader, &mut stdout)?;
             while object.expected_size > read_bytes {

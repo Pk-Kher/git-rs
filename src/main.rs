@@ -30,6 +30,7 @@ enum Commands {
         name_only: bool,
         tree_object: String,
     },
+    WriteTree,
 }
 fn main() -> anyhow::Result<()> {
     let args = Args::parse();
@@ -46,12 +47,18 @@ fn main() -> anyhow::Result<()> {
             object_hash,
         } => commands::cat_file::invoke(pretty_print, object_hash)?,
         Commands::HashObject { write, file_path } => {
-            commands::hash_object::invoke(write, &file_path)?
+            commands::hash_object::invoke(write, &file_path)?;
         }
         Commands::LsTree {
             name_only,
             tree_object,
         } => commands::ls_tree::invoke(name_only, tree_object)?,
+        Commands::WriteTree => {
+            commands::write_tree::invoke(&PathBuf::from("."))?;
+        }
     }
     Ok(())
 }
+//
+// [u8; 20] is the real SHA-1 value
+// bS/sFN*% is just a human-readable representation of those bytes

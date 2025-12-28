@@ -1,9 +1,8 @@
 use anyhow::Context;
-use flate2::Compression;
-use flate2::write::ZlibEncoder;
 // use flate2::read::ZlibEncoder; // my code
-use sha1::{Digest, Sha1};
-use std::{io::prelude::*, path::Path};
+use std::path::Path;
+
+use crate::objects::Object;
 
 pub(crate) fn invoke(write: bool, file_path: &Path) -> anyhow::Result<()> {
     // run test
@@ -12,43 +11,18 @@ pub(crate) fn invoke(write: bool, file_path: &Path) -> anyhow::Result<()> {
     // $ echo "hello world" > test.txt
     // $ ./your_program.sh hash-object -w test.txt
     // 3b18e512dba79e4c8300dd08aeb37f8e728b8dad
-    fn write_blob<W>(file: &Path, writer: W) -> anyhow::Result<String>
-    where
-        W: Write,
-    {
-        let stat = std::fs::metadata(&file)
-            .with_context(|| format!("Reading metadata of the file {:?}", &file))?;
-        let z = ZlibEncoder::new(writer, Compression::default());
-        let mut writer = HashWriter {
-            writer: z,
-            hasher: Sha1::new(),
-        };
-        write!(writer, "blob ")?;
-        write!(writer, "{}\0", stat.len())?;
-        let mut file = std::fs::File::open(&file)?;
-        std::io::copy(&mut file, &mut writer).context("Merge the file content and the header")?;
-        writer.writer.finish()?;
-        let hash = writer.hasher.finalize();
-        Ok(format!("{:x}", hash))
-    }
+    let object = Object::blob_from_file(file_path)?;
     let hash = if write {
-        let tmp = "temporary";
-        let hash = write_blob(
-            &file_path,
-            std::fs::File::create(tmp).context("Failed to create File")?,
-        )?;
-        std::fs::create_dir_all(format!(".git/objects/{}", &hash[..2]))
-            .context("Failed to create parent dir for .git/objects/")?;
-        std::fs::rename(tmp, format!(".git/objects/{}/{}", &hash[..2], &hash[2..]))
-            .context("Failed to move tmp file into .git/objects")?;
-        hash
+        object
+            .write_to_object()
+            .context("failed to write the blob object")?
     } else {
-        write_blob(
-            &file_path,
-            std::fs::File::create(&file_path).context("Failed to create File")?,
-        )?
+        object
+            .write(std::io::sink())
+            .context("failed to write the blob object")?
     };
-    println!("{}", hash);
+
+    println!("{}", hex::encode(hash));
     Ok(())
     //
     //
@@ -82,22 +56,4 @@ pub(crate) fn invoke(write: bool, file_path: &Path) -> anyhow::Result<()> {
     //     &buffer[..],
     // )
     // .context("Failed to create file in .git/objects")?;
-}
-struct HashWriter<W> {
-    writer: W,
-    hasher: Sha1,
-}
-
-impl<W> Write for HashWriter<W>
-where
-    W: Write,
-{
-    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
-        let n = self.writer.write(buf)?;
-        self.hasher.update(&buf[..n]);
-        Ok(n)
-    }
-    fn flush(&mut self) -> std::io::Result<()> {
-        self.writer.flush()
-    }
 }
