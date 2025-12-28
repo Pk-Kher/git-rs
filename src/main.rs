@@ -1,5 +1,6 @@
 use anyhow::Context;
 use clap::{Parser, Subcommand, command};
+use ini::Ini;
 use std::fmt::format;
 use std::fs;
 use std::path::PathBuf;
@@ -104,7 +105,7 @@ fn main() -> anyhow::Result<()> {
 
             std::fs::write(format!(".git/{head_ref}"), &commit_hash)
                 .with_context(|| format!("Failed to update the HEAD ref at :{}", head_ref))?;
-            eprintln!("HEAD is now at {}",commit_hash);
+            eprintln!("HEAD is now at {}", commit_hash);
         }
     }
     Ok(())
