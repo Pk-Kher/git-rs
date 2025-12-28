@@ -33,12 +33,10 @@ enum Commands {
     WriteTree,
     CommitTree {
         tree_sha: String,
-        #[arg(short = 'p')]
-        parent_commit: bool,
-        commit_sha: String,
-        #[arg(short = 'm')]
-        commit_flag: bool,
-        commit_message: String,
+        #[arg(short = 'p', value_name = "PARENT_COMMIT")]
+        parent_commit: Option<String>,
+        #[arg(short = 'm', value_name = "COMMIT_MESSAGE")]
+        commit_message: Option<String>,
     },
 }
 fn main() -> anyhow::Result<()> {
@@ -68,17 +66,9 @@ fn main() -> anyhow::Result<()> {
         Commands::CommitTree {
             tree_sha,
             parent_commit,
-            commit_sha,
-            commit_flag,
             commit_message,
         } => {
-            commands::commit_tree::invoke(
-                tree_sha,
-                parent_commit,
-                commit_sha,
-                commit_flag,
-                commit_message,
-            )?;
+            commands::commit_tree::invoke(tree_sha, parent_commit, commit_message)?;
         }
     }
     Ok(())
