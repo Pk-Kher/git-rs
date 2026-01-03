@@ -1,4 +1,7 @@
-use std::io::{BufRead, Cursor, Read};
+use std::{
+    fs::File,
+    io::{BufRead, BufReader, Read},
+};
 
 use anyhow::Context;
 
@@ -6,8 +9,8 @@ use anyhow::Context;
 pub(crate) fn invoke() -> anyhow::Result<()> {
     // NOTE: .git/index file get store as binary
     //
-    let f = std::fs::read(".git/index").context("Open the .git/index file.")?;
-    let mut reader = Cursor::new(&f[..]);
+    let f = std::fs::File::open(".git/index").context("Open the .git/index file.")?;
+    let mut reader = BufReader::new(f);
     let mut header = [0u8; 4];
     reader
         .read_exact(&mut header)
@@ -43,7 +46,7 @@ pub(crate) fn invoke() -> anyhow::Result<()> {
     Ok(())
 }
 
-fn read_be(r: &mut Cursor<&[u8]>) -> anyhow::Result<u32> {
+fn read_be(r: &mut BufReader<File>) -> anyhow::Result<u32> {
     let mut buf = [0u8; 4];
     r.read_exact(&mut buf)?;
     Ok(u32::from_be_bytes(buf))
