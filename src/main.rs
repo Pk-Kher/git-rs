@@ -15,6 +15,7 @@ struct Args {
 #[derive(Subcommand, Debug)]
 enum Commands {
     Init,
+    // plumbing command
     CatFile {
         #[arg(short = 'p')]
         pretty_print: bool,
@@ -38,6 +39,8 @@ enum Commands {
         #[arg(short = 'm', value_name = "COMMIT_MESSAGE")]
         commit_message: String,
     },
+    LsFiles,
+    // general commands
     Commit {
         #[arg(short = 'm')]
         message: String,
@@ -75,6 +78,7 @@ fn main() -> anyhow::Result<()> {
         } => {
             commands::commit_tree::invoke(tree_sha, parent_commit_sha, commit_message)?;
         }
+        Commands::LsFiles => commands::ls_file::invoke()?,
         Commands::Commit { message } => commands::commit::invoke(&message)?,
     }
     Ok(())
