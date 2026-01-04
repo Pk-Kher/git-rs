@@ -19,13 +19,13 @@ pub(crate) fn invoke(stage: bool, _: bool) -> anyhow::Result<()> {
 
     let _ = read_be(&mut reader).context("Reading version of the .git/index")?;
     let num_of_entries = read_be(&mut reader).context("Reading entry from the .git/index")?;
-
+    let mut file_path = Vec::with_capacity(20);
+    let mut stats = [0u8; 62];
     for i in 0..num_of_entries {
-        let mut stats = [0u8; 62];
+        file_path.clear();
         reader
             .read_exact(&mut stats)
             .with_context(|| format!("Reading the stats for {} entry", i))?;
-        let mut file_path = Vec::new();
         let file_path_bytes_count = reader
             .read_until(0, &mut file_path)
             .with_context(|| format!("Reading file path for entry {}", i))?;
@@ -33,10 +33,11 @@ pub(crate) fn invoke(stage: bool, _: bool) -> anyhow::Result<()> {
             file_path.pop();
         }
         let padding = (8 - ((62 + file_path_bytes_count) % 8)) % 8;
-        let mut padding = vec![0u8; padding];
-        reader
-            .read_exact(&mut padding)
-            .context("Reading padding bytes")?;
+        if padding > 0 {
+            reader
+                .seek_relative(padding as i64)
+                .context("Reading padding bytes")?;
+        }
         if stage {
             let hash = hex::encode(&stats[40..=59]);
             // NOTE: flag have 2 bytes let say it's [0, 15] →  0x000F  →  decimal 15
