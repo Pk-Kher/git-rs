@@ -6,7 +6,7 @@ use std::{
 use anyhow::Context;
 
 // NOTE:: this command is use to read the .git/index file
-pub(crate) fn invoke() -> anyhow::Result<()> {
+pub(crate) fn invoke(stage: bool, _: bool) -> anyhow::Result<()> {
     // NOTE: .git/index file get store as binary
     //
     let f = std::fs::File::open(".git/index").context("Open the .git/index file.")?;
@@ -37,7 +37,31 @@ pub(crate) fn invoke() -> anyhow::Result<()> {
         reader
             .read_exact(&mut padding)
             .context("Reading padding bytes")?;
-        println!("{}", str::from_utf8(&file_path)?)
+        if stage {
+            let hash = hex::encode(&stats[40..=59]);
+            // NOTE: flag have 2 bytes let say it's [0, 15] →  0x000F  →  decimal 15
+            // represent this in binary 0010 0000 0000 1000
+            //15 14 13 12 11 ............ 0
+            //      ↑  ↑
+            //      └──┴── stage
+            // to extract the 12 and 13 bit we need to move this bit in to right (do the right
+            // shift) stage = (flags >> 12) & 0b11 <- 0b11 will get only uses exactly 2 bits
+            // 0000 0000 0000 0010 &0b11 -> 10 return only first 2 bits
+            //
+            //
+            //
+            let flags = u16::from_be_bytes(stats[60..=61].try_into().unwrap());
+            let flags = ((flags >> 12) & 0b11) as u8;
+            println!(
+                "{:o} {} {:?}\t{}",
+                u32::from_be_bytes(stats[24..=27].try_into().unwrap()), // mode
+                hash,                                                   // hash
+                flags,                                                  // stage
+                str::from_utf8(&file_path)?                             // path
+            );
+        } else {
+            println!("{}", str::from_utf8(&file_path)?)
+        }
     }
 
     // let stdout = std::io::stdout();
@@ -51,7 +75,7 @@ fn read_be(r: &mut BufReader<File>) -> anyhow::Result<u32> {
     r.read_exact(&mut buf)?;
     Ok(u32::from_be_bytes(buf))
 }
-// you need to read byte by byte first 12 is the header
+//NOTE: you need to read byte by byte first 12 is the header
 // DIRC 4 bytes
 // version 4 bytes
 // entry 4 bytes
@@ -80,3 +104,17 @@ fn read_be(r: &mut BufReader<File>) -> anyhow::Result<u32> {
 // 71 % 8 = 7
 // padding = 1
 // padding is \0 null bytes
+// flag - 2 bytes 12 bits
+// bit index: 15 14 13 12 11 .............. 0
+//            ┌─┬──┬──┬───────────────────┐
+//            │ │  │  │
+//            │ │  │  └─ path length (12 bits)
+//            │ │  └──── stage (2 bits)
+//            │ └─────── extended / assume-valid
+//            └──────── unused / future
+// 15        14        13        12        11                   0
+// ┌─────────┬─────────┬─────────┬─────────┬────────────────────┐
+// │ unused  │ ext/AV  │ stage 1 │ stage 0 │   path length (12) │
+// └─────────┴─────────┴─────────┴─────────┴────────────────────┘
+//
+//

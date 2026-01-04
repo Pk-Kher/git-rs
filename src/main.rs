@@ -39,7 +39,12 @@ enum Commands {
         #[arg(short = 'm', value_name = "COMMIT_MESSAGE")]
         commit_message: String,
     },
-    LsFiles,
+    LsFiles {
+        #[arg(short = 's', long = "stage")]
+        stage: bool,
+        #[arg(short = 'c', long = "cached")]
+        cached: bool,
+    },
     // general commands
     Commit {
         #[arg(short = 'm')]
@@ -78,7 +83,7 @@ fn main() -> anyhow::Result<()> {
         } => {
             commands::commit_tree::invoke(tree_sha, parent_commit_sha, commit_message)?;
         }
-        Commands::LsFiles => commands::ls_file::invoke()?,
+        Commands::LsFiles { stage, cached } => commands::ls_file::invoke(stage,cached)?,
         Commands::Commit { message } => commands::commit::invoke(&message)?,
     }
     Ok(())
