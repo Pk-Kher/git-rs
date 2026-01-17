@@ -5,6 +5,8 @@ use anyhow::Context;
 
 use crate::objects::{self, Kind};
 
+// NOTE: it's use to list all the files and directories in the hash tree object
+// git ls-tree --name-only tree_hash
 pub(crate) fn invoke(name_only: bool, tree_object: String) -> anyhow::Result<()> {
     // print!("{}, {:?} ", name_only, tree_object);
     let mut object = objects::Object::read(&tree_object)?;
@@ -14,7 +16,7 @@ pub(crate) fn invoke(name_only: bool, tree_object: String) -> anyhow::Result<()>
             let mut mode = Vec::new();
             let mut file_name = Vec::new();
             let mut hashbuf = [0; 20];
-           // let stdout = std::io::stdout();
+            // let stdout = std::io::stdout();
             // let mut stdout = stdout.lock();
             // std::io::copy(&mut object.reader, &mut stdout)?;
             while object.expected_size > read_bytes {
@@ -54,3 +56,4 @@ pub(crate) fn invoke(name_only: bool, tree_object: String) -> anyhow::Result<()>
     }
     Ok(())
 }
+// TEST: https://app.codecrafters.io/courses/git/stages/kp1

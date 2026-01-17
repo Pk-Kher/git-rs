@@ -6,9 +6,11 @@ use std::{
 use anyhow::Context;
 
 // NOTE:: this command is use to read the .git/index file
+// cargo run -- ls-files --stage
 pub(crate) fn invoke(stage: bool, _: bool) -> anyhow::Result<()> {
     // NOTE: .git/index file get store as binary
     //
+    //you might to think read whole file in one go.
     let f = std::fs::File::open(".git/index").context("Open the .git/index file.")?;
     let mut reader = BufReader::new(f);
     let mut header = [0u8; 4];
@@ -19,7 +21,7 @@ pub(crate) fn invoke(stage: bool, _: bool) -> anyhow::Result<()> {
 
     let _ = read_be(&mut reader).context("Reading version of the .git/index")?;
     let num_of_entries = read_be(&mut reader).context("Reading entry from the .git/index")?;
-    let mut file_path = Vec::with_capacity(20);
+    let mut file_path = Vec::with_capacity(256);
     let mut stats = [0u8; 62];
     for i in 0..num_of_entries {
         file_path.clear();

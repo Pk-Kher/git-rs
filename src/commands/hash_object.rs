@@ -4,13 +4,14 @@ use std::path::Path;
 
 use crate::objects::Object;
 
+// NOTE: it's use to write the object file currenly only support the blob file
+// run test
+// $ mkdir test_dir && cd test_dir
+// $ /path/to/your_program.sh init
+// $ echo "hello world" > test.txt
+// $ ./your_program.sh hash-object -w test.txt
+// 3b18e512dba79e4c8300dd08aeb37f8e728b8dad
 pub(crate) fn invoke(write: bool, file_path: &Path) -> anyhow::Result<()> {
-    // run test
-    // $ mkdir test_dir && cd test_dir
-    // $ /path/to/your_program.sh init
-    // $ echo "hello world" > test.txt
-    // $ ./your_program.sh hash-object -w test.txt
-    // 3b18e512dba79e4c8300dd08aeb37f8e728b8dad
     let object = Object::blob_from_file(file_path)?;
     let hash = if write {
         object
@@ -57,3 +58,13 @@ pub(crate) fn invoke(write: bool, file_path: &Path) -> anyhow::Result<()> {
     // )
     // .context("Failed to create file in .git/objects")?;
 }
+
+// TEST:
+// The tester will first initialize a new git repository using your program:
+// $ mkdir test_dir && cd test_dir
+// $ /path/to/your_program.sh init
+// It'll write some random data to a file:
+// $ echo "hello world" > test.txt
+// It'll then run your program like this:
+// $ ./your_program.sh hash-object -w test.txt
+// 3b18e512dba79e4c8300dd08aeb37f8e728b8dad

@@ -1,4 +1,4 @@
-use clap::{Parser, Subcommand, command};
+use clap::{Parser, Subcommand};
 use std::fs;
 use std::path::PathBuf;
 
@@ -7,8 +7,7 @@ pub(crate) mod objects;
 
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
-struct Args {
-    #[command(subcommand)]
+struct Args { #[command(subcommand)]
     command: Commands,
 }
 
@@ -45,6 +44,10 @@ enum Commands {
         #[arg(short = 'c', long = "cached")]
         cached: bool,
     },
+    // UpdateIndex{
+    //
+    //     add:bool
+    // },
     // general commands
     Commit {
         #[arg(short = 'm')]
@@ -83,7 +86,7 @@ fn main() -> anyhow::Result<()> {
         } => {
             commands::commit_tree::invoke(tree_sha, parent_commit_sha, commit_message)?;
         }
-        Commands::LsFiles { stage, cached } => commands::ls_file::invoke(stage,cached)?,
+        Commands::LsFiles { stage, cached } => commands::ls_file::invoke(stage, cached)?,
         Commands::Commit { message } => commands::commit::invoke(&message)?,
     }
     Ok(())

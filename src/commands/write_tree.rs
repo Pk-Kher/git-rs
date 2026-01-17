@@ -5,6 +5,18 @@ use std::os::unix::fs::PermissionsExt;
 use std::{cmp::Ordering, path::Path};
 
 use crate::objects::{Kind, Object};
+
+// NOTE: it's use to write the tree object
+// cargo run -- write-tree path
+// if you try to compare with original git write-tree then you need to first do git add . other wise
+// it will not match the current command does not support the staging area
+pub(crate) fn invoke(path: &Path) -> anyhow::Result<()> {
+    let Some(hash) = write_tree_for(path).context("Faild construct root tree object")? else {
+        anyhow::bail!("asked to make tree object for empty tree");
+    };
+    println!("{}", hex::encode(hash));
+    Ok(())
+}
 pub(crate) fn write_tree_for(path: &Path) -> anyhow::Result<Option<[u8; 20]>> {
     // let mut dir = std::fs::read_dir(path).context("Failed to read the current dir")?;
     let mut dir = WalkBuilder::new(path)
@@ -116,11 +128,15 @@ pub(crate) fn write_tree_for(path: &Path) -> anyhow::Result<Option<[u8; 20]>> {
         ))
     }
 }
-
-pub(crate) fn invoke(path: &Path) -> anyhow::Result<()> {
-    let Some(hash) = write_tree_for(path).context("Faild construct root tree object")? else {
-        anyhow::bail!("asked to make tree object for empty tree");
-    };
-    println!("{}", hex::encode(hash));
-    Ok(())
-}
+// TEST: https://app.codecrafters.io/courses/git/stages/fe4
+// The git write-tree Command
+// The git write-tree command creates a tree object from the current state of the "staging area". The staging area is a place where changes go when you run git add.
+// For this challenge, you will not implement a staging area. Instead, assume that all files in the working directory are already staged.
+// Here's an example of using git write-tree:
+// # Create a file with some content
+// $ echo "hello world" > test.txt
+// # Add the file to the staging area (we won't implement a staging area in this challenge)
+// $ git add test.txt
+// # Write the tree to .git/objects
+// $ git write-tree
+// 4b825dc642cb6eb9a060e54bf8d69288fbee4904

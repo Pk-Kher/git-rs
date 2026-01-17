@@ -2,6 +2,12 @@ use crate::commands::{commit_tree::write_commit, write_tree::write_tree_for};
 use anyhow::Context;
 use std::path::PathBuf;
 
+// NOTE: it will add your latest commit to the list
+// it will create the new commit object
+// it will update the HEAD ref
+// so when you run git log you will see the new commit
+// and show child based on the parent commit
+// cargo run -- commit -m "commit message"
 pub fn invoke(message: &str) -> anyhow::Result<()> {
     // to commit we need value same as the commit-tree
     //value of head=ref: refs/heads/master
