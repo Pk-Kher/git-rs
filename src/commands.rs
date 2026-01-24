@@ -5,3 +5,4 @@ pub(crate) mod ls_tree;
 pub(crate) mod write_tree;
 pub(crate) mod commit;
 pub(crate) mod ls_file;
+pub(crate) mod update_index;

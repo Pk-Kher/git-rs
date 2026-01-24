@@ -7,7 +7,8 @@ pub(crate) mod objects;
 
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
-struct Args { #[command(subcommand)]
+struct Args {
+    #[command(subcommand)]
     command: Commands,
 }
 
@@ -44,10 +45,11 @@ enum Commands {
         #[arg(short = 'c', long = "cached")]
         cached: bool,
     },
-    // UpdateIndex{
-    //
-    //     add:bool
-    // },
+    UpdateIndex {
+        #[arg(long = "add")]
+        add: bool,
+        file_path: Option<String>,
+    },
     // general commands
     Commit {
         #[arg(short = 'm')]
@@ -88,6 +90,7 @@ fn main() -> anyhow::Result<()> {
         }
         Commands::LsFiles { stage, cached } => commands::ls_file::invoke(stage, cached)?,
         Commands::Commit { message } => commands::commit::invoke(&message)?,
+        Commands::UpdateIndex { add, file_path } => commands::update_index::invoke(add, file_path)?,
     }
     Ok(())
 }

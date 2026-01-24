@@ -10,6 +10,10 @@ use crate::objects::{Kind, Object};
 // cargo run -- write-tree path
 // if you try to compare with original git write-tree then you need to first do git add . other wise
 // it will not match the current command does not support the staging area
+// file strucrure
+// tree <size>\0
+// <mode> <name>\0<20_byte_sha>
+// <mode> <name>\0<20_byte_sha>
 pub(crate) fn invoke(path: &Path) -> anyhow::Result<()> {
     let Some(hash) = write_tree_for(path).context("Faild construct root tree object")? else {
         anyhow::bail!("asked to make tree object for empty tree");

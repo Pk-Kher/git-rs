@@ -11,6 +11,10 @@ use crate::objects::Object;
 // $ echo "hello world" > test.txt
 // $ ./your_program.sh hash-object -w test.txt
 // 3b18e512dba79e4c8300dd08aeb37f8e728b8dad
+//
+// NOTE: file content store as in location .git/objects/<hash - first 2>/<hash - rest>
+// blob <size>\0<content>
+// content is the zlib compressed data
 pub(crate) fn invoke(write: bool, file_path: &Path) -> anyhow::Result<()> {
     let object = Object::blob_from_file(file_path)?;
     let hash = if write {
@@ -20,9 +24,8 @@ pub(crate) fn invoke(write: bool, file_path: &Path) -> anyhow::Result<()> {
     } else {
         object
             .write(std::io::sink())
-            .context("failed to write the blob object")?
+            .context("failed to get the hash of the blob object")?
     };
-
     println!("{}", hex::encode(hash));
     Ok(())
     //

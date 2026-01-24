@@ -28,6 +28,7 @@ pub(crate) fn invoke(stage: bool, _: bool) -> anyhow::Result<()> {
         reader
             .read_exact(&mut stats)
             .with_context(|| format!("Reading the stats for {} entry", i))?;
+        eprintln!("{:?}", &stats[0..=3]);
         let file_path_bytes_count = reader
             .read_until(0, &mut file_path)
             .with_context(|| format!("Reading file path for entry {}", i))?;
@@ -55,6 +56,7 @@ pub(crate) fn invoke(stage: bool, _: bool) -> anyhow::Result<()> {
             //
             let flags = u16::from_be_bytes(stats[60..=61].try_into().unwrap());
             let flags = ((flags >> 12) & 0b11) as u8;
+
             println!(
                 "{:o} {} {:?}\t{}",
                 u32::from_be_bytes(stats[24..=27].try_into().unwrap()), // mode
@@ -80,7 +82,7 @@ fn read_be(r: &mut BufReader<File>) -> anyhow::Result<u32> {
 }
 //NOTE: you need to read byte by byte first 12 is the header
 // DIRC 4 bytes
-// version 4 bytes
+// version 4 bytes u32 big endian
 // entry 4 bytes
 // | Field      | Size (bytes) |  // all the number will get store in the  <big endian>
 // | ---------- | ------------ |
