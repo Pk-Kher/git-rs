@@ -17,9 +17,12 @@ pub fn invoke(message: &str) -> anyhow::Result<()> {
         anyhow::bail!("Refusing to commit onto detached HEAD")
     };
     let head_ref = head_ref.trim();
-    let parent_sha = std::fs::read_to_string(format!("./.git/{head_ref}"))
-        .with_context(|| format!("Failed to read the parent commit hash:{}", head_ref))?;
-    let parent_sha = parent_sha.trim();
+    // here might get some problem what if head_ref is availble but we are failed to read it
+    let parent_sha = std::fs::read_to_string(format!("./.git/{head_ref}"));
+    let parent_sha = match &parent_sha {
+        Ok(parent_sha) => Some(parent_sha.trim()),
+        Err(_) => None,
+    };
 
     let Some(tree_hash) = write_tree_for(&PathBuf::from("."))? else {
         eprintln!("Not commiting the empty tree");
@@ -27,10 +30,11 @@ pub fn invoke(message: &str) -> anyhow::Result<()> {
     };
     let tree_hash = hex::encode(tree_hash);
 
-    let commit_hash = write_commit(&tree_hash, Some(parent_sha), &message)
+    let commit_hash = write_commit(&tree_hash, parent_sha, &message)
         .with_context(|| format!("Failed to generate commit hash"))?;
     let commit_hash = hex::encode(commit_hash);
 
+    // on the first commit we need to create the file in side the .git/refs/heads/branch_name
     std::fs::write(format!(".git/{head_ref}"), &commit_hash)
         .with_context(|| format!("Failed to update the HEAD ref at :{}", head_ref))?;
     eprintln!("HEAD is now at {}", commit_hash);
