@@ -1,18 +1,19 @@
 use std::{
     fs::File,
-    io::{BufRead, BufReader, Read},
+    io::{ BufReader, Read, BufRead},
 };
 
 use anyhow::Context;
 
 // NOTE:: this command is use to read the .git/index file
 // cargo run -- ls-files --stage
-pub(crate) fn invoke(stage: bool, _: bool) -> anyhow::Result<()> {
-    // NOTE: .git/index file get store as binary
-    //
-    //you might to think read whole file in one go.
-    let f = std::fs::File::open(".git/index").context("Open the .git/index file.")?;
-    let mut reader = BufReader::new(f);
+pub(crate) struct IndexFileInfo {
+    num_of_entries: u32,
+    reader:BufReader<File>,
+}
+pub(crate) fn fetch_index_file_info() -> anyhow::Result<IndexFileInfo> {
+    let file_res = std::fs::File::open(".git/index").context("Opening the .git/index file")?;
+    let mut reader = BufReader::new(file_res);
     let mut header = [0u8; 4];
     reader
         .read_exact(&mut header)
@@ -21,6 +22,40 @@ pub(crate) fn invoke(stage: bool, _: bool) -> anyhow::Result<()> {
 
     let _ = read_be(&mut reader).context("Reading version of the .git/index")?;
     let num_of_entries = read_be(&mut reader).context("Reading entry from the .git/index")?;
+    Ok(IndexFileInfo {
+        num_of_entries,
+        reader,
+    })
+}
+pub(crate) fn invoke(stage: bool, _: bool) -> anyhow::Result<()> {
+    // NOTE: .git/index file get store as binary
+    //
+    //you might to think read whole file in one go.
+    // let file_res = std::fs::File::open(".git/index");
+    // let f= match file_res{
+    //     Ok(f) => f,
+    //     Err(_)=>{
+    //         eprintln!("No files are staged for commit.\n Use `add <file>` to stage changes.");
+    //         std::process::exit(1);
+    //     },
+    // };
+    // let mut reader = BufReader::new(f);
+    // let mut header = [0u8; 4];
+    // reader
+    //     .read_exact(&mut header)
+    //     .context("Reading the header")?;
+    // assert_eq!(&header[..], b"DIRC");
+
+    // let _ = read_be(&mut reader).context("Reading version of the .git/index")?;
+    // let num_of_entries = read_be(&mut reader).context("Reading entry from the .git/index")?;
+    let IndexFileInfo { num_of_entries, mut reader } =match  fetch_index_file_info() {
+        Ok(info) => info,
+        Err(_) => {
+            eprintln!("No files are staged for commit.\n Use `add <file>` to stage changes.");
+            std::process::exit(1);
+        }
+    };
+
     let mut file_path = Vec::with_capacity(256);
     let mut stats = [0u8; 62];
     for i in 0..num_of_entries {
@@ -28,7 +63,6 @@ pub(crate) fn invoke(stage: bool, _: bool) -> anyhow::Result<()> {
         reader
             .read_exact(&mut stats)
             .with_context(|| format!("Reading the stats for {} entry", i))?;
-        eprintln!("{:?}", &stats[0..=3]);
         let file_path_bytes_count = reader
             .read_until(0, &mut file_path)
             .with_context(|| format!("Reading file path for entry {}", i))?;

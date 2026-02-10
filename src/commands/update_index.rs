@@ -10,6 +10,7 @@ use sha1::{Digest, Sha1};
 
 use crate::objects::Object;
 const READER_VERSION: u32 = 2;
+// NOTE: currently i'm just creating new file every time i need to update file if it's already exist
 pub(crate) fn invoke(add: bool, file_path: Option<String>) -> anyhow::Result<()> {
     eprintln!("{} {:?} ", add, file_path);
     if let Some(file_path) = file_path {
@@ -20,7 +21,7 @@ pub(crate) fn invoke(add: bool, file_path: Option<String>) -> anyhow::Result<()>
         buf.extend((1 as u32).to_be_bytes());
         // entry start;
         let metadata = fs::metadata(&file_path).context("Reading metadata for the file")?;
-        // all the meatadata if the value is greater then u32::MAX it will get truncated
+        // all the metadata if the value is greater then u32::MAX it will get truncated
         buf.extend((metadata.ctime() as u32).to_be_bytes());
         buf.extend((metadata.ctime_nsec() as u32).to_be_bytes());
         buf.extend((metadata.mtime() as u32).to_be_bytes());

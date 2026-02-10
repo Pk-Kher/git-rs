@@ -88,8 +88,8 @@ fn main() -> anyhow::Result<()> {
         } => {
             commands::commit_tree::invoke(tree_sha, parent_commit_sha, commit_message)?;
         }
-        Commands::LsFiles { stage, cached } => commands::ls_file::invoke(stage, cached)?,
         Commands::Commit { message } => commands::commit::invoke(&message)?,
+        Commands::LsFiles { stage, cached } => commands::ls_file::invoke(stage, cached)?,
         Commands::UpdateIndex { add, file_path } => commands::update_index::invoke(add, file_path)?,
     }
     Ok(())
