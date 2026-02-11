@@ -1,6 +1,6 @@
 use std::{
     fs::{self, OpenOptions},
-    io::Write,
+    io::{BufReader, Read, Write,BufRead},
     os::unix::fs::MetadataExt,
     path::Path,
 };
@@ -8,49 +8,62 @@ use std::{
 use anyhow::Context;
 use sha1::{Digest, Sha1};
 
-use crate::objects::Object;
+use crate::{
+    commands::ls_file::{read_file_path, read_index_header},
+    objects::Object,
+};
 const READER_VERSION: u32 = 2;
 // NOTE: currently i'm just creating new file every time i need to update file if it's already exist
-pub(crate) fn invoke(add: bool, file_path: Option<String>) -> anyhow::Result<()> {
-    eprintln!("{} {:?} ", add, file_path);
-    if let Some(file_path) = file_path {
-        let mut buf: Vec<u8> = Vec::with_capacity(128);
-        // header
-        buf.extend(b"DIRC");
-        buf.extend(READER_VERSION.to_be_bytes());
-        buf.extend((1 as u32).to_be_bytes());
-        // entry start;
-        let metadata = fs::metadata(&file_path).context("Reading metadata for the file")?;
-        // all the metadata if the value is greater then u32::MAX it will get truncated
-        buf.extend((metadata.ctime() as u32).to_be_bytes());
-        buf.extend((metadata.ctime_nsec() as u32).to_be_bytes());
-        buf.extend((metadata.mtime() as u32).to_be_bytes());
-        buf.extend((metadata.mtime_nsec() as u32).to_be_bytes());
-        buf.extend((metadata.dev() as u32).to_be_bytes());
-        buf.extend((metadata.ino() as u32).to_be_bytes());
-        buf.extend(metadata.mode().to_be_bytes());
-        buf.extend(metadata.uid().to_be_bytes());
-        buf.extend(metadata.gid().to_be_bytes());
-        buf.extend((metadata.size() as u32).to_be_bytes());
-        let object = Object::blob_from_file(&file_path)?;
-        let sha1 = object
-            .write(std::io::sink())
-            .context("Create the hash of the blob")?;
-        buf.extend(sha1);
-        // NOTE: you need to handle the merge conflict related stage
-        let flag = build_flag(0, file_path.as_bytes().len()); // here we don't need string length but we need bytes len
-        buf.extend(flag.to_be_bytes());
-        buf.extend(file_path.as_bytes());
-        buf.extend(b"\0");
-        // one file total length should be multiply of 8
-        let padding = vec![0; (8 - (buf.len() % 8)) % 8];
-        buf.extend(padding);
-        // entry end;
-        let mut hasher = Sha1::new();
-        hasher.update(&buf);
-        let hash = hasher.finalize();
-        buf.extend(hash);
-        write_atomic_index(buf)?;
+// you need to store the files in the some specific order (Index entries are sorted lexicographically by pathname (byte order))
+pub(crate) fn invoke(_add: bool, file_path: Option<String>) -> anyhow::Result<()> {
+    // read the existing index file
+    let file_path = file_path.unwrap_or_else(|| {
+        eprintln!(
+            "No file path provided. Use `--add <file>` to specify a file to add to the index."
+        );
+        std::process::exit(1);
+    });
+    let file = std::fs::File::open(".git/index");
+    // header
+    let mut header_buf = Vec::with_capacity(8);
+    header_buf.extend(b"DIRC");
+    header_buf.extend(READER_VERSION.to_be_bytes()); // version
+    let mut count_entries: u32 = 0;
+    // let count_entries= (0 as u32).to_be_bytes();
+
+    let mut buf: Vec<u8> = Vec::with_capacity(128);
+    // NOTE: check for the delete file as well
+    if file.is_ok() {
+        let mut reader = BufReader::new(file.unwrap());
+        let num_of_entries = read_index_header(&mut reader)?;
+        count_entries = num_of_entries;
+        let mut entry_file_path_buf = Vec::with_capacity(256);
+        let mut stats = [0u8; 62];
+        for i in 0..num_of_entries {
+            entry_file_path_buf.clear();
+            // read the stats for each entry
+            reader
+                .read_exact(&mut stats)
+                .with_context(|| format!("Reading the stats for {} entry", i))?;
+            let entry_padding=read_file_path(&mut reader, &mut entry_file_path_buf)?;
+            let entry_file_path_str = str::from_utf8(&entry_file_path_buf)?;
+            if entry_file_path_str == &file_path {
+                eprintln!("entry file path: {:?}", str::from_utf8(&entry_file_path_buf)?);
+                write_index_file(&file_path, &mut buf)?;
+            }else{
+                buf.extend(stats); 
+                buf.extend(&entry_file_path_buf[..]);
+                buf.extend(b"\0");
+                let padding = vec![0; entry_padding];
+                buf.extend(padding)
+            }
+        }
+        // if let Some(file_path) = file_path{
+        //     write_index_file(file_path,&mut buf)?;
+        // }
+        header_buf.extend((count_entries).to_be_bytes());
+        header_buf.extend(buf);
+        write_atomic_index(header_buf)?;
     }
     Ok(())
 }
@@ -59,6 +72,42 @@ fn build_flag(stage: u16, path_length: usize) -> u16 {
     let path_length = std::cmp::min(path_length as u16, 0x0FFF); // enforce 12 bits
     (stage << 12) | path_length // we shift 12 bit of the stage so it will make room for the path
     // length
+}
+
+fn write_index_file(file_path: &String, buf: &mut Vec<u8>) -> anyhow::Result<()> {
+    // entry start;
+    let metadata = fs::metadata(file_path).context("Reading metadata for the file")?;
+    // all the metadata if the value is greater then u32::MAX it will get truncated
+    buf.extend((metadata.ctime() as u32).to_be_bytes());
+    buf.extend((metadata.ctime_nsec() as u32).to_be_bytes());
+    buf.extend((metadata.mtime() as u32).to_be_bytes());
+    buf.extend((metadata.mtime_nsec() as u32).to_be_bytes());
+    buf.extend((metadata.dev() as u32).to_be_bytes());
+    buf.extend((metadata.ino() as u32).to_be_bytes());
+    buf.extend(metadata.mode().to_be_bytes());
+    buf.extend(metadata.uid().to_be_bytes());
+    buf.extend(metadata.gid().to_be_bytes());
+    buf.extend((metadata.size() as u32).to_be_bytes());
+    let object = Object::blob_from_file(&file_path)?;
+    let sha1 = object
+        .write(std::io::sink())
+        .context("Create the hash of the blob")?;
+    buf.extend(sha1);
+    // NOTE: you need to handle the merge conflict related stage
+    let flag = build_flag(0, file_path.as_bytes().len()); // here we don't need string length but we need bytes len
+    buf.extend(flag.to_be_bytes());
+    // end metadata
+    buf.extend(file_path.as_bytes());
+    buf.extend(b"\0");
+    // one file total length should be multiply of 8
+    let padding = vec![0; (8 - (buf.len() % 8)) % 8];
+    buf.extend(padding);
+    // entry end;
+    let mut hasher = Sha1::new();
+    hasher.update(&buf);
+    let hash = hasher.finalize();
+    buf.extend(hash);
+    Ok(())
 }
 
 fn write_atomic_index(buf: Vec<u8>) -> anyhow::Result<()> {
