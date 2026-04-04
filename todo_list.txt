@@ -1,0 +1,9 @@
+
+
+main goal
+- you are working on the "update-index" command read the note to get started
+
+
+
+extra 
+- need to fetch the git username from the the global config

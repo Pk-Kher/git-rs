@@ -61,10 +61,12 @@ fn main() -> anyhow::Result<()> {
     let args = Args::parse();
     match args.command {
         Commands::Init => {
-            fs::create_dir(".git").unwrap();
-            fs::create_dir(".git/objects").unwrap();
-            fs::create_dir(".git/refs").unwrap();
-            fs::write(".git/HEAD", "ref: refs/heads/main\n").unwrap();
+            // git reinitialize is not working currently
+            fs::create_dir(".git")?;
+            fs::create_dir(".git/objects")?;
+            fs::create_dir(".git/refs")?;
+            fs::create_dir(".git/refs/heads")?;
+            fs::write(".git/HEAD", "ref: refs/heads/main\n")?;
             println!("Initialized git directory")
         }
         Commands::CatFile {

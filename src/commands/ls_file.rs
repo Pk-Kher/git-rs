@@ -30,7 +30,7 @@ pub(crate) fn invoke(stage: bool, _: bool) -> anyhow::Result<()> {
             .read_exact(&mut stats)
             .with_context(|| format!("Reading the stats for {} entry", i))?;
         // read the file path for each entry
-        read_file_path(&mut reader, &mut file_path)?;
+        read_file_entry(&mut reader, &mut file_path)?;
         if stage {
             let hash = hex::encode(&stats[40..=59]);
             // NOTE: flag have 2 bytes let say it's [0, 15] →  0x000F  →  decimal 15
@@ -75,7 +75,7 @@ pub(crate) fn read_index_header(mut reader: &mut BufReader<File>) -> anyhow::Res
     let num_of_entries = read_be(&mut reader).context("Reading entry from the .git/index")?;
     Ok(num_of_entries)
 }
-pub(crate)  fn read_file_path(reader: &mut BufReader<File>,mut file_path: &mut Vec<u8>,) -> anyhow::Result<usize> {
+pub(crate)  fn read_file_entry(reader: &mut BufReader<File>,mut file_path: &mut Vec<u8>,) -> anyhow::Result<usize> {
     let file_path_bytes_count = reader
         .read_until(0, &mut file_path)
         .with_context(|| format!("Reading file path for entry.", ))?;

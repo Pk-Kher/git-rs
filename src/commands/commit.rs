@@ -1,6 +1,6 @@
 use crate::commands::{commit_tree::write_commit, write_tree::write_tree_for};
 use anyhow::Context;
-use std::path::PathBuf;
+use std::path::{ PathBuf};
 
 // NOTE: it will add your latest commit to the list
 // it will create the new commit object
@@ -34,9 +34,14 @@ pub fn invoke(message: &str) -> anyhow::Result<()> {
         .with_context(|| format!("Failed to generate commit hash"))?;
     let commit_hash = hex::encode(commit_hash);
 
-    // on the first commit we need to create the file in side the .git/refs/heads/branch_name
-    std::fs::write(format!(".git/{head_ref}"), &commit_hash)
-        .with_context(|| format!("Failed to update the HEAD ref at :{}", head_ref))?;
+    write_branch(head_ref, &commit_hash)?;
     eprintln!("HEAD is now at {}", commit_hash);
+
+    Ok(())
+}
+
+pub(crate) fn write_branch(head_ref: &str, commit_hash: &str) -> anyhow::Result<()> {
+    let path = format!(".git/{}", head_ref);
+    std::fs::write(path, commit_hash)?;
     Ok(())
 }
