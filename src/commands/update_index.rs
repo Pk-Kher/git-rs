@@ -1,6 +1,6 @@
 use std::{
     fs::{self, OpenOptions},
-    io::{BufRead, BufReader, Read, Write},
+    io::{BufReader, Read, Write},
     os::unix::fs::MetadataExt,
     path::Path,
 };
@@ -12,7 +12,7 @@ use crate::{
     commands::ls_file::{read_file_entry, read_index_header},
     objects::Object,
 };
-
+#[derive(Debug)]
 struct IndexEntry {
     file_path: String,
     raw: Vec<u8>,
@@ -71,62 +71,106 @@ pub(crate) fn invoke(_add: bool, file_path: Option<String>) -> anyhow::Result<()
         );
         std::process::exit(1);
     });
+    let file_path = normalize_path(&file_path);
+
     let file = std::fs::File::open(".git/index");
     // header
     let mut header_buf = Vec::with_capacity(8);
     header_buf.extend(b"DIRC");
     header_buf.extend(READER_VERSION.to_be_bytes()); // version
-    let mut count_entries: u32;
+    let mut count_entries: u32 = 0;
     //
-    let mut buf: Vec<u8> = Vec::with_capacity(128);
-    // NOTE: check for the delete file as well
+    let mut buf: Vec<IndexEntry> = Vec::new();
+    // check if the index file exist if then read the file
     if file.is_ok() {
+        // NOTE: check for the delete file as well
         let mut reader = BufReader::new(file.unwrap());
-        let count_entries = read_index_header(&mut reader)?;
-        let mut entry_file_path_buf = Vec::with_capacity(256);
+        count_entries = read_index_header(&mut reader)?;
+
+        let mut entry_file_path_buf = Vec::with_capacity(256); // there no reason the use 256 here 
         let mut stats = [0u8; 62];
         let mut is_updated = false;
         for i in 0..count_entries {
             entry_file_path_buf.clear();
+            let mut entry = IndexEntry {
+                file_path: String::new(),
+                raw: Vec::with_capacity(128),
+            };
             // read the stats for each entry
             reader
                 .read_exact(&mut stats)
                 .with_context(|| format!("Reading the stats for {} entry", i))?;
             let entry_padding_size = read_file_entry(&mut reader, &mut entry_file_path_buf)?;
             let entry_file_path_str = str::from_utf8(&entry_file_path_buf)?;
+            entry.file_path = entry_file_path_str.to_string();
             if entry_file_path_str == &file_path {
                 // update the index file
                 is_updated = true;
-                eprintln!(
-                    "entry file path: {:?}",
-                    str::from_utf8(&entry_file_path_buf)?
-                );
-                write_index_file(&file_path, &mut buf)?;
+                write_index_file(&file_path, &mut entry.raw)?;
             } else {
-                buf.extend(stats);
-                buf.extend(&entry_file_path_buf[..]);
-                buf.extend(b"\0");
+                entry.raw.extend(stats);
+                entry.raw.extend(&entry_file_path_buf[..]);
+                entry.raw.extend(b"\0");
                 let padding = vec![0; entry_padding_size];
-                buf.extend(padding)
+                entry.raw.extend(padding)
             }
+            buf.push(entry);
         }
         if !is_updated {
-            write_index_file(&file_path, &mut buf)?;
+            let mut entry = IndexEntry {
+                file_path: String::new(),
+                raw: Vec::with_capacity(128),
+            };
+            entry.file_path = file_path;
+            write_index_file(&entry.file_path, &mut entry.raw)?;
             count_entries += 1;
+            buf.push(entry);
         }
-        header_buf.extend((count_entries).to_be_bytes());
-        header_buf.extend(buf);
-
-        let mut hasher = Sha1::new();
-        hasher.update(&header_buf);
-        header_buf.extend(hasher.finalize());
-
-        write_atomic_index(header_buf)?;
+        // sort the entry by the file path bytes
     } else {
-        eprintln!("file not found");
+        let mut entry = IndexEntry {
+            file_path: String::new(),
+            raw: Vec::with_capacity(128),
+        };
+        write_index_file(&file_path, &mut entry.raw)?;
     }
+
+    buf.sort_by(|a, b| a.file_path.as_bytes().cmp(&b.file_path.as_bytes()));
+    header_buf.extend((count_entries).to_be_bytes());
+    for entry in buf {
+        header_buf.extend(entry.raw);
+    }
+    let mut hasher = Sha1::new();
+    hasher.update(&header_buf);
+    header_buf.extend(hasher.finalize());
+    write_atomic_index(header_buf)?;
     Ok(())
 }
+
+fn normalize_path(path: &str) -> String {
+    // you need to normalize the path beccause "./name" sored like "name"
+    let mut parts: Vec<String> = Vec::new();
+
+    for com in Path::new(path).components() {
+        match com {
+            std::path::Component::Normal(os_str) => {
+                parts.push(os_str.to_string_lossy().into_owned());
+            }
+            std::path::Component::ParentDir => {
+                parts.pop();
+            }
+            // std::path::Component::CurDir=>{
+            //     // do nothing
+            // }
+            // std::path::Component::RootDir=>{
+            //     // do nothing
+            // }
+            _ => {}
+        };
+    }
+    parts.join("/")
+}
+
 fn build_flag(stage: u16, path_length: usize) -> u16 {
     let stage = stage & 0b11; // enforce 2 bits
     let path_length = std::cmp::min(path_length as u16, 0x0FFF); // enforce 12 bits
