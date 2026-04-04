@@ -18,51 +18,7 @@ struct IndexEntry {
     raw: Vec<u8>,
 }
 const READER_VERSION: u32 = 2;
-// NOTE: currently i'm just creating new file every time i need to update file if it's already exist
-// you need to store the files in the some specific order (Index entries are sorted lexicographically by pathname (byte order))
-pub(crate) fn _invoke(add: bool, file_path: Option<String>) -> anyhow::Result<()> {
-    eprintln!("{} {:?} ", add, file_path);
-    if let Some(file_path) = file_path {
-        let mut buf: Vec<u8> = Vec::with_capacity(128);
-        // header
-        buf.extend(b"DIRC");
-        buf.extend(READER_VERSION.to_be_bytes());
-        buf.extend((1 as u32).to_be_bytes());
-        // entry start;
-        let metadata = fs::metadata(&file_path).context("Reading metadata for the file")?;
-        // all the meatadata if the value is greater then u32::MAX it will get truncated
-        buf.extend((metadata.ctime() as u32).to_be_bytes());
-        buf.extend((metadata.ctime_nsec() as u32).to_be_bytes());
-        buf.extend((metadata.mtime() as u32).to_be_bytes());
-        buf.extend((metadata.mtime_nsec() as u32).to_be_bytes());
-        buf.extend((metadata.dev() as u32).to_be_bytes());
-        buf.extend((metadata.ino() as u32).to_be_bytes());
-        buf.extend(metadata.mode().to_be_bytes());
-        buf.extend(metadata.uid().to_be_bytes());
-        buf.extend(metadata.gid().to_be_bytes());
-        buf.extend((metadata.size() as u32).to_be_bytes());
-        let object = Object::blob_from_file(&file_path)?;
-        let sha1 = object
-            .write(std::io::sink())
-            .context("Create the hash of the blob")?;
-        buf.extend(sha1);
-        // NOTE: you need to handle the merge conflict related stage
-        let flag = build_flag(0, file_path.as_bytes().len()); // here we don't need string length but we need bytes len
-        buf.extend(flag.to_be_bytes());
-        buf.extend(file_path.as_bytes());
-        buf.extend(b"\0");
-        // one file total length should be multiply of 8
-        let padding = vec![0; (8 - (buf.len() % 8)) % 8];
-        buf.extend(padding);
-        // entry end;
-        let mut hasher = Sha1::new();
-        hasher.update(&buf);
-        let hash = hasher.finalize();
-        buf.extend(hash);
-        write_atomic_index(buf)?;
-    }
-    Ok(())
-}
+
 pub(crate) fn invoke(_add: bool, file_path: Option<String>) -> anyhow::Result<()> {
     // read the existing index file
     let file_path = file_path.unwrap_or_else(|| {
