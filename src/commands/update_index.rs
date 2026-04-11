@@ -2,15 +2,14 @@ use std::{
     fs::{self, OpenOptions},
     io::{BufReader, Read, Write},
     os::unix::fs::MetadataExt,
-    path::Path,
+    path::{Path, PathBuf},
 };
 
 use anyhow::Context;
 use sha1::{Digest, Sha1};
 
 use crate::{
-    commands::ls_file::{read_file_entry, read_index_header},
-    objects::Object,
+    commands::{self, ls_file::{read_file_entry, read_index_header}},
 };
 #[derive(Debug)]
 struct IndexEntry {
@@ -19,7 +18,7 @@ struct IndexEntry {
 }
 const READER_VERSION: u32 = 2;
 
-pub(crate) fn invoke(_add: bool, file_path: Option<String>) -> anyhow::Result<()> {
+pub(crate) fn invoke(_add: bool, file_path: Option<PathBuf>) -> anyhow::Result<()> {
     // read the existing index file
     let file_path = file_path.unwrap_or_else(|| {
         eprintln!(
@@ -34,15 +33,13 @@ pub(crate) fn invoke(_add: bool, file_path: Option<String>) -> anyhow::Result<()
     let mut header_buf = Vec::with_capacity(8);
     header_buf.extend(b"DIRC");
     header_buf.extend(READER_VERSION.to_be_bytes()); // version
-    let mut count_entries: u32 = 0;
     //
     let mut buf: Vec<IndexEntry> = Vec::new();
     // check if the index file exist if then read the file
     if file.is_ok() {
         // NOTE: check for the delete file as well
         let mut reader = BufReader::new(file.unwrap());
-        count_entries = read_index_header(&mut reader)?;
-
+        let count_entries = read_index_header(&mut reader)?;
         let mut entry_file_path_buf = Vec::with_capacity(256); // there no reason the use 256 here 
         let mut stats = [0u8; 62];
         let mut is_updated = false;
@@ -79,20 +76,19 @@ pub(crate) fn invoke(_add: bool, file_path: Option<String>) -> anyhow::Result<()
             };
             entry.file_path = file_path;
             write_index_file(&entry.file_path, &mut entry.raw)?;
-            count_entries += 1;
             buf.push(entry);
         }
-        // sort the entry by the file path bytes
     } else {
         let mut entry = IndexEntry {
             file_path: String::new(),
             raw: Vec::with_capacity(128),
         };
         write_index_file(&file_path, &mut entry.raw)?;
+        buf.push(entry);
     }
-
+    // sort the entry by the file path bytes
     buf.sort_by(|a, b| a.file_path.as_bytes().cmp(&b.file_path.as_bytes()));
-    header_buf.extend((count_entries).to_be_bytes());
+    header_buf.extend((buf.len() as u32).to_be_bytes());
     for entry in buf {
         header_buf.extend(entry.raw);
     }
@@ -103,7 +99,7 @@ pub(crate) fn invoke(_add: bool, file_path: Option<String>) -> anyhow::Result<()
     Ok(())
 }
 
-fn normalize_path(path: &str) -> String {
+fn normalize_path(path: &PathBuf) -> String {
     // you need to normalize the path beccause "./name" sored like "name"
     let mut parts: Vec<String> = Vec::new();
 
@@ -148,10 +144,12 @@ fn write_index_file(file_path: &String, buf: &mut Vec<u8>) -> anyhow::Result<()>
     buf.extend(metadata.uid().to_be_bytes());
     buf.extend(metadata.gid().to_be_bytes());
     buf.extend((metadata.size() as u32).to_be_bytes());
-    let object = Object::blob_from_file(&file_path)?;
-    let sha1 = object
-        .write(std::io::sink())
-        .context("Create the hash of the blob")?;
+    // let object = Object::blob_from_file(&file_path)?;
+    // let sha1 = object
+    //     .write(std::io::sink())
+    //     .context("Create the hash of the blob")?;
+    let path_buf_for_file = PathBuf::from(&file_path);
+    let sha1 = commands::hash_object::invoke(true,&path_buf_for_file)?;
     buf.extend(sha1);
     // NOTE: you need to handle the merge conflict related stage
     let flag = build_flag(0, file_path.as_bytes().len()); // here we don't need string length but we need bytes len

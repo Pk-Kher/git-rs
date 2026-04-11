@@ -15,7 +15,7 @@ use crate::objects::Object;
 // NOTE: file content store as in location .git/objects/<hash - first 2>/<hash - rest>
 // blob <size>\0<content>
 // content is the zlib compressed data
-pub(crate) fn invoke(write: bool, file_path: &Path) -> anyhow::Result<()> {
+pub(crate) fn invoke(write: bool, file_path: &Path) -> anyhow::Result<[u8; 20]> {
     let object = Object::blob_from_file(file_path)?;
     let hash = if write {
         object
@@ -26,8 +26,8 @@ pub(crate) fn invoke(write: bool, file_path: &Path) -> anyhow::Result<()> {
             .write(std::io::sink())
             .context("failed to get the hash of the blob object")?
     };
-    println!("{}", hex::encode(hash));
-    Ok(())
+    println!("{}",hex::encode(hash));
+    Ok(hash)
     //
     //
     // this is my code  its working but not optimize

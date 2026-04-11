@@ -48,7 +48,7 @@ enum Commands {
     UpdateIndex {
         #[arg(long = "add")]
         add: bool,
-        file_path: Option<String>,
+        file_path: Option<PathBuf>,
     },
     // general commands
     Commit {
