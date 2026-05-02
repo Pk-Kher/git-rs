@@ -144,3 +144,11 @@ pub(crate) fn write_tree_for(path: &Path) -> anyhow::Result<Option<[u8; 20]>> {
 // # Write the tree to .git/objects
 // $ git write-tree
 // 4b825dc642cb6eb9a060e54bf8d69288fbee4904
+//
+// The <mode> Field
+//
+// The <mode> field shows the type and permissions for each entry. Some valid values include:
+//
+//     100644 - Regular file
+//     100755 - Executable file
+//     40000 - Directory (Tree object)

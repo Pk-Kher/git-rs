@@ -24,6 +24,8 @@ pub fn invoke(message: &str) -> anyhow::Result<()> {
         Err(_) => None,
     };
 
+    // NOTE: i think there is something wrong here if i specifiy the . as tree path then it will
+    // have whole files in the tree. so i don't know this right or wrong
     let Some(tree_hash) = write_tree_for(&PathBuf::from("."))? else {
         eprintln!("Not commiting the empty tree");
         return Ok(());

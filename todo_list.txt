@@ -1,8 +1,8 @@
 
 
 main goal
-- need to update all the file that available in the folder like "update-index ./src"
 
+you just neeeeeed to called the update-index fuction in the add invoke file
 
 
 

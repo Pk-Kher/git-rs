@@ -55,7 +55,9 @@ enum Commands {
         #[arg(short = 'm')]
         message: String,
     },
-    // implement the git config user.name and user.email
+    Add {
+        path: PathBuf,
+    }, // implement the git config user.name and user.email
 }
 fn main() -> anyhow::Result<()> {
     let args = Args::parse();
@@ -93,6 +95,7 @@ fn main() -> anyhow::Result<()> {
         Commands::Commit { message } => commands::commit::invoke(&message)?,
         Commands::LsFiles { stage, cached } => commands::ls_file::invoke(stage, cached)?,
         Commands::UpdateIndex { add, file_path } => commands::update_index::invoke(add, file_path)?,
+        Commands::Add { path } => commands::add::invoke(&path)?,
     }
     Ok(())
 }

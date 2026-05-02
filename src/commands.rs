@@ -6,3 +6,4 @@ pub(crate) mod write_tree;
 pub(crate) mod commit;
 pub(crate) mod ls_file;
 pub(crate) mod update_index;
+pub(crate) mod add;
