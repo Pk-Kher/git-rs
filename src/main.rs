@@ -57,7 +57,8 @@ enum Commands {
     },
     Add {
         path: PathBuf,
-    }, // implement the git config user.name and user.email
+    },
+    // implement the git config user.name and user.email
 }
 fn main() -> anyhow::Result<()> {
     let args = Args::parse();

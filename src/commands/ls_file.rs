@@ -12,14 +12,14 @@ pub(crate) fn invoke(stage: bool, _: bool) -> anyhow::Result<()> {
     //
     //you might to think read whole file in one go.
     let file_res = std::fs::File::open(".git/index");
-    let f= match file_res{
+    let mut f= match file_res{
         Ok(f) => f,
         Err(_)=>{
             eprintln!("No files are staged for commit.\n Use `add <file>` to stage changes.");
             std::process::exit(1);
         },
     };
-    let mut reader = BufReader::new(f);
+    let mut reader = BufReader::new(&mut f);
     let num_of_entries=read_index_header(&mut reader)?;
     let mut file_path = Vec::with_capacity(256);
     let mut stats = [0u8; 62];
@@ -65,7 +65,7 @@ pub(crate) fn invoke(stage: bool, _: bool) -> anyhow::Result<()> {
     Ok(())
 }
 
-pub(crate) fn read_index_header(mut reader: &mut BufReader<File>) -> anyhow::Result<u32> {
+pub(crate) fn read_index_header(mut reader: &mut BufReader<&mut File>) -> anyhow::Result<u32> {
     let mut header = [0u8; 4];
     reader
         .read_exact(&mut header)
@@ -75,7 +75,7 @@ pub(crate) fn read_index_header(mut reader: &mut BufReader<File>) -> anyhow::Res
     let num_of_entries = read_be(&mut reader).context("Reading entry from the .git/index")?;
     Ok(num_of_entries)
 }
-pub(crate)  fn read_file_entry(reader: &mut BufReader<File>,mut file_path: &mut Vec<u8>,) -> anyhow::Result<usize> {
+pub(crate)  fn read_file_entry(reader: &mut BufReader<&mut File>,mut file_path: &mut Vec<u8>,) -> anyhow::Result<usize> {
     let file_path_bytes_count = reader
         .read_until(0, &mut file_path)
         .with_context(|| format!("Reading file path for entry.", ))?;
@@ -91,7 +91,7 @@ pub(crate)  fn read_file_entry(reader: &mut BufReader<File>,mut file_path: &mut 
     Ok(padding)
 }
 
-fn read_be(r: &mut BufReader<File>) -> anyhow::Result<u32> {
+fn read_be(r: &mut BufReader<&mut File>) -> anyhow::Result<u32> {
     let mut buf = [0u8; 4];
     r.read_exact(&mut buf)?;
     Ok(u32::from_be_bytes(buf))

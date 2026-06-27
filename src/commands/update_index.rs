@@ -1,5 +1,5 @@
 use std::{
-    fs::{self, OpenOptions},
+    fs::{self, File, OpenOptions},
     io::{BufReader, Read, Write},
     os::unix::fs::MetadataExt,
     path::{Path, PathBuf},
@@ -8,11 +8,12 @@ use std::{
 use anyhow::Context;
 use sha1::{Digest, Sha1};
 
-use crate::{
-    commands::{self, ls_file::{read_file_entry, read_index_header}},
+use crate::commands::{
+    self,
+    ls_file::{read_file_entry, read_index_header},
 };
 #[derive(Debug)]
-struct IndexEntry {
+pub(crate) struct IndexEntry {
     file_path: String,
     raw: Vec<u8>,
 }
@@ -26,21 +27,49 @@ pub(crate) fn invoke(_add: bool, file_path: Option<PathBuf>) -> anyhow::Result<(
         );
         std::process::exit(1);
     });
-    let file_path = normalize_path(&file_path);
 
-    let file = std::fs::File::open(".git/index");
+    let mut index_file = std::fs::File::open(".git/index");
+
+    let mut buf: Vec<IndexEntry> = Vec::new();
+    update_index_file_buffer(&mut index_file, &file_path, &mut buf)
+        .with_context(|| format!("Faield to update the your selected files into the index file"))?;
+    update_index_file(buf)?;
+    Ok(())
+}
+
+pub(crate) fn update_index_file(mut buf: Vec<IndexEntry>) -> anyhow::Result<()> {
+    // sort the entry by the file path bytes
+    buf.sort_by(|a, b| a.file_path.as_bytes().cmp(&b.file_path.as_bytes()));
+
     // header
     let mut header_buf = Vec::with_capacity(8);
     header_buf.extend(b"DIRC");
     header_buf.extend(READER_VERSION.to_be_bytes()); // version
+    header_buf.extend((buf.len() as u32).to_be_bytes());
+    for entry in buf {
+        header_buf.extend(entry.raw);
+    }
+
+    let mut hasher = Sha1::new();
+    hasher.update(&header_buf);
+    header_buf.extend(hasher.finalize());
+    write_atomic_index(header_buf)?;
+    Ok(())
+}
+
+pub(crate) fn update_index_file_buffer(
+    index_file:&mut Result<File, std::io::Error>,
+    file_path: &Path,
+    buf: &mut Vec<IndexEntry>,
+) -> anyhow::Result<()> {
+    let file_path = normalize_path(&file_path);
     //
-    let mut buf: Vec<IndexEntry> = Vec::new();
     // check if the index file exist if then read the file
-    if file.is_ok() {
+    if index_file.is_ok() {
         // NOTE: check for the delete file as well
-        let mut reader = BufReader::new(file.unwrap());
+        let mut reader = BufReader::new(index_file.as_mut().unwrap());
         let count_entries = read_index_header(&mut reader)?;
-        let mut entry_file_path_buf = Vec::with_capacity(256); // there no reason the use 256 here 
+        let mut entry_file_path_buf = Vec::with_capacity(256); // there nol reason the use 256 here 
         let mut stats = [0u8; 62];
         let mut is_updated = false;
         for i in 0..count_entries {
@@ -59,7 +88,7 @@ pub(crate) fn invoke(_add: bool, file_path: Option<PathBuf>) -> anyhow::Result<(
             if entry_file_path_str == &file_path {
                 // update the index file
                 is_updated = true;
-                write_index_file(&file_path, &mut entry.raw)?;
+                write_each_file_entry(&file_path, &mut entry.raw)?;
             } else {
                 entry.raw.extend(stats);
                 entry.raw.extend(&entry_file_path_buf[..]);
@@ -75,32 +104,23 @@ pub(crate) fn invoke(_add: bool, file_path: Option<PathBuf>) -> anyhow::Result<(
                 raw: Vec::with_capacity(128),
             };
             entry.file_path = file_path;
-            write_index_file(&entry.file_path, &mut entry.raw)?;
+            write_each_file_entry(&entry.file_path, &mut entry.raw)?;
             buf.push(entry);
         }
+        return Ok(());
     } else {
         let mut entry = IndexEntry {
             file_path: String::new(),
             raw: Vec::with_capacity(128),
         };
-        write_index_file(&file_path, &mut entry.raw)?;
+        write_each_file_entry(&file_path, &mut entry.raw)?;
         buf.push(entry);
+        Ok(())
     }
-    // sort the entry by the file path bytes
-    buf.sort_by(|a, b| a.file_path.as_bytes().cmp(&b.file_path.as_bytes()));
-    header_buf.extend((buf.len() as u32).to_be_bytes());
-    for entry in buf {
-        header_buf.extend(entry.raw);
-    }
-    let mut hasher = Sha1::new();
-    hasher.update(&header_buf);
-    header_buf.extend(hasher.finalize());
-    write_atomic_index(header_buf)?;
-    Ok(())
 }
 
-fn normalize_path(path: &PathBuf) -> String {
-    // you need to normalize the path beccause "./name" sored like "name"
+fn normalize_path(path: &Path) -> String {
+    // you need to normalize the path beccause "./name" stored like "name"
     let mut parts: Vec<String> = Vec::new();
 
     for com in Path::new(path).components() {
@@ -130,7 +150,7 @@ fn build_flag(stage: u16, path_length: usize) -> u16 {
     // length
 }
 
-fn write_index_file(file_path: &String, buf: &mut Vec<u8>) -> anyhow::Result<()> {
+fn write_each_file_entry(file_path: &String, buf: &mut Vec<u8>) -> anyhow::Result<()> {
     // entry start;
     let metadata = fs::metadata(file_path).context("Reading metadata for the file")?;
     // all the metadata if the value is greater then u32::MAX it will get truncated
@@ -149,7 +169,7 @@ fn write_index_file(file_path: &String, buf: &mut Vec<u8>) -> anyhow::Result<()>
     //     .write(std::io::sink())
     //     .context("Create the hash of the blob")?;
     let path_buf_for_file = PathBuf::from(&file_path);
-    let sha1 = commands::hash_object::invoke(true,&path_buf_for_file)?;
+    let sha1 = commands::hash_object::invoke(true, &path_buf_for_file)?;
     buf.extend(sha1);
     // NOTE: you need to handle the merge conflict related stage
     let flag = build_flag(0, file_path.as_bytes().len()); // here we don't need string length but we need bytes len
